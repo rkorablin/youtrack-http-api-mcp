@@ -59,7 +59,7 @@ node server.mjs
 
 Add to your MCP config (e.g. `.cursor/mcp.json` under `mcpServers`).
 
-#### Option 1: Local clone (recommended for ~/ai/)
+#### Option 1: Local clone
 
 ```json
 "youtrack": {
