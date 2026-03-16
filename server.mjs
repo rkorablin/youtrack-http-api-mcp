@@ -39,7 +39,12 @@ async function ytCommand(command, opts = {}) {
 }
 
 function jsonContent(value) {
-  return [{ type: 'json', json: value }];
+  return [
+    {
+      type: 'text',
+      text: typeof value === 'string' ? value : JSON.stringify(value, null, 2)
+    }
+  ];
 }
 
 const server = new Server(

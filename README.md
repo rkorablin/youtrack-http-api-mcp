@@ -12,7 +12,17 @@ Works with any YouTrack instance that exposes the standard [YouTrack REST API](h
 
 ## Install
 
-From source (this repo):
+### From source (Git repo)
+
+From GitHub:
+
+```bash
+git clone https://github.com/rkorablin/youtrack-http-api-mcp.git
+cd youtrack-http-api-mcp
+npm install
+```
+
+From self‑hosted GitLab:
 
 ```bash
 git clone https://gitlab.greenworm.ru/ai/youtrack-http-api-mcp.git
@@ -20,7 +30,19 @@ cd youtrack-http-api-mcp
 npm install
 ```
 
-> Публикация в npm и внешние репозитории опциональна; по умолчанию проект живёт в экосистеме `~/ai/` и GitLab `gitlab.greenworm.ru`.
+### From npm
+
+As a local dependency:
+
+```bash
+npm install youtrack-http-api-mcp
+```
+
+Or globally (for `npx` / CLI usage):
+
+```bash
+npm install -g youtrack-http-api-mcp
+```
 
 ## Configuration
 
@@ -45,10 +67,12 @@ node server.mjs
 
 ### Cursor / MCP host
 
-Add to your MCP config (e.g. `.cursor/mcp.json` under `mcpServers`):
+Add to your MCP config (e.g. `.cursor/mcp.json` under `mcpServers`).
+
+#### Option 1: Local clone (recommended for ~/ai/)
 
 ```json
-"youtrack-http-api": {
+"youtrack": {
   "command": "node",
   "args": ["/absolute/path/to/youtrack-http-api-mcp/server.mjs"],
   "env": {
@@ -58,7 +82,32 @@ Add to your MCP config (e.g. `.cursor/mcp.json` under `mcpServers`):
 }
 ```
 
-Later we can also add an npm-based launcher (e.g. via `npx youtrack-http-api-mcp`) if/когда потребуется публикация.
+#### Option 2: npm / npx
+
+If installed globally:
+
+```json
+"youtrack": {
+  "command": "youtrack-http-api-mcp",
+  "env": {
+    "YOUTRACK_URL": "https://youtrack.example.com",
+    "YOUTRACK_TOKEN": "YOUR_TOKEN"
+  }
+}
+```
+
+Or via `npx`:
+
+```json
+"youtrack": {
+  "command": "npx",
+  "args": ["-y", "youtrack-http-api-mcp"],
+  "env": {
+    "YOUTRACK_URL": "https://youtrack.example.com",
+    "YOUTRACK_TOKEN": "YOUR_TOKEN"
+  }
+}
+```
 
 ## Current tools (MVP)
 
