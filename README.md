@@ -14,18 +14,8 @@ Works with any YouTrack instance that exposes the standard [YouTrack REST API](h
 
 ### From source (Git repo)
 
-From GitHub:
-
 ```bash
 git clone https://github.com/rkorablin/youtrack-http-api-mcp.git
-cd youtrack-http-api-mcp
-npm install
-```
-
-From self‑hosted GitLab:
-
-```bash
-git clone https://gitlab.greenworm.ru/ai/youtrack-http-api-mcp.git
 cd youtrack-http-api-mcp
 npm install
 ```
