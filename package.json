@@ -1,12 +1,20 @@
 {
   "name": "youtrack-http-api-mcp",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "MCP server for YouTrack over HTTP API (issues, KB, and related resources)",
   "type": "module",
   "main": "server.mjs",
   "bin": {
     "youtrack-http-api-mcp": "server.mjs"
   },
+  "files": [
+    "server.mjs",
+    "lib",
+    "README.md",
+    "LICENSE",
+    "ONBOARDING_PROMPT.md",
+    "docs"
+  ],
   "engines": {
     "node": ">=18"
   },
@@ -26,5 +34,8 @@
   ],
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
   }
 }

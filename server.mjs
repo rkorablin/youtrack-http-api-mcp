@@ -12,6 +12,11 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { ListToolsRequestSchema, CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
+import {
+  buildCommandsRequestBody,
+  buildLinkCommandQuery,
+  projectPayloadForCreateIssue
+} from './lib/youtrack-helpers.mjs';
 
 const baseUrl = (process.env.YOUTRACK_URL || '').replace(/\/$/, '');
 const token = process.env.YOUTRACK_TOKEN;
@@ -24,14 +29,37 @@ function authHeaders() {
 }
 
 async function ytFetch(path, opts = {}) {
-  const res = await fetch(`${api}${path}`, { ...opts, headers: { ...authHeaders(), ...opts.headers } });
+  const headers = { ...authHeaders(), ...opts.headers };
+  const res = await fetch(`${api}${path}`, { ...opts, headers });
   const text = await res.text();
-  if (!res.ok) throw new Error(`${res.status} ${res.statusText}: ${text.slice(0, 400)}`);
+  if (!res.ok) {
+    if (res.status === 400) {
+      const { Authorization: _a, ...safeHeaders } = headers;
+      const requestBody =
+        typeof opts.body === 'string' ? opts.body : opts.body != null ? JSON.stringify(opts.body) : undefined;
+      console.error(
+        '[youtrack-http-api-mcp] HTTP 400 (full response + request payload, Authorization redacted)',
+        JSON.stringify(
+          {
+            path,
+            method: opts.method || 'GET',
+            requestHeaders: safeHeaders,
+            requestBody,
+            responseBody: text
+          },
+          null,
+          2
+        )
+      );
+    }
+    throw new Error(`${res.status} ${res.statusText}: ${text.slice(0, 400)}`);
+  }
   return text ? JSON.parse(text) : null;
 }
 
-async function ytCommand(command, opts = {}) {
-  const body = { query: command, ...(opts || {}) };
+/** Apply YouTrack command via POST /api/commands (requires CommandList.issues). */
+async function ytApplyCommand(query, issueIds, extra = {}) {
+  const body = buildCommandsRequestBody(query, issueIds, extra);
   return ytFetch('/commands?fields=id,query,issues(id,idReadable,summary)', {
     method: 'POST',
     body: JSON.stringify(body)
@@ -48,7 +76,7 @@ function jsonContent(value) {
 }
 
 const server = new Server(
-  { name: 'youtrack-http-api-mcp', version: '0.2.0' },
+  { name: 'youtrack-http-api-mcp', version: '0.2.2' },
   { capabilities: { tools: {} } }
 );
 
@@ -130,11 +158,12 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'youtrack_create_issue',
-      description: 'Create a new issue in YouTrack.',
+      description:
+        'Create a new issue in YouTrack. projectId: use project shortName (e.g. IAG) or internal id (e.g. 81-219); shortName is sent as project.shortName, numeric id as project.id.',
       inputSchema: {
         type: 'object',
         properties: {
-          projectId: { type: 'string', description: 'Project id or shortName', default: '' },
+          projectId: { type: 'string', description: 'Project shortName (IAG) or internal id (81-219)', default: '' },
           summary: { type: 'string', description: 'Issue summary' },
           description: { type: 'string', description: 'Issue description (optional)' },
           type: { type: 'string', description: 'Issue type name (optional)' }
@@ -205,7 +234,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'youtrack_manage_issue_tags',
-      description: 'Add or remove tags on an issue via Commands API.',
+      description:
+        'Add or remove tags on an issue via Commands API (POST /api/commands with query + issues[]). Use id or idReadable (e.g. PRJ-1).',
       inputSchema: {
         type: 'object',
         properties: {
@@ -226,13 +256,17 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'youtrack_link_issues',
-      description: 'Link two issues via Commands API.',
+      description:
+        'Link two issues via Commands API. Command is applied to sourceId; use linkType as in your YouTrack (e.g. "Subtask of", "depends on", "relates to"). Multi-word types are sent as-is; single-word types become "link <type> <target>".',
       inputSchema: {
         type: 'object',
         properties: {
-          sourceId: { type: 'string', description: 'Source issue id (e.g. PRJ-1)' },
-          targetId: { type: 'string', description: 'Target issue id (e.g. PRJ-2)' },
-          linkType: { type: 'string', description: 'Link type name (e.g. relates to, depends on)' }
+          sourceId: { type: 'string', description: 'Issue the command applies to (child for Subtask of)' },
+          targetId: { type: 'string', description: 'Other issue id or idReadable (e.g. PRJ-2)' },
+          linkType: {
+            type: 'string',
+            description: 'e.g. "Subtask of", "depends on", "relates to" (must match link names in your instance)'
+          }
         },
         required: ['sourceId', 'targetId', 'linkType']
       }
@@ -423,8 +457,9 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
       const projectId = a.projectId || '';
       const description = a.description || '';
       const type = a.type || '';
+      const project = projectPayloadForCreateIssue(projectId);
       const body = {
-        project: projectId ? { id: projectId, shortName: projectId } : undefined,
+        ...(project ? { project } : {}),
         summary,
         description,
         ...(type ? { customFields: [{ name: 'Type', $type: 'SingleEnumIssueCustomField', value: { name: type } }] } : {})
@@ -454,9 +489,9 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
       const id = a.id;
       const assignee = a.assignee;
       if (!id || !assignee) throw new Error('id and assignee are required');
-      const cmd = `for: ${id} Assignee ${assignee}`;
-      const data = await ytCommand(cmd);
-      return { content: jsonContent({ command: cmd, result: data }) };
+      const query = `Assignee ${assignee}`;
+      const data = await ytApplyCommand(query, [id]);
+      return { content: jsonContent({ query, issues: [id], result: data }) };
     }
 
     if (name === 'youtrack_add_issue_comment') {
@@ -498,9 +533,9 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
       const parts = [];
       if (add.length) parts.push(`tag ${add.join(', ')}`);
       if (remove.length) parts.push(`untag ${remove.join(', ')}`);
-      const cmd = `for: ${id} ${parts.join(' ')}`;
-      const data = await ytCommand(cmd);
-      return { content: jsonContent({ command: cmd, result: data }) };
+      const query = parts.join(' ');
+      const data = await ytApplyCommand(query, [id]);
+      return { content: jsonContent({ query, issues: [id], result: data }) };
     }
 
     if (name === 'youtrack_link_issues') {
@@ -508,9 +543,9 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
       const targetId = a.targetId;
       const linkType = a.linkType;
       if (!sourceId || !targetId || !linkType) throw new Error('sourceId, targetId and linkType are required');
-      const cmd = `for: ${sourceId} link ${linkType} ${targetId}`;
-      const data = await ytCommand(cmd);
-      return { content: jsonContent({ command: cmd, result: data }) };
+      const query = buildLinkCommandQuery(linkType, targetId);
+      const data = await ytApplyCommand(query, [sourceId]);
+      return { content: jsonContent({ query, issues: [sourceId], targetId, linkType, result: data }) };
     }
 
     // Projects
