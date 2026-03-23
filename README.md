@@ -77,6 +77,33 @@ If `linkType` is a **single word** (no spaces), the server sends `link <linkType
 
 To see which link types exist in the UI, use YouTrack administration or inspect existing issue links in the web UI. There is no single REST enum used by all instances; names must match the command language of your server.
 
+### Values with spaces (braces syntax)
+
+YouTrack Commands API requires multi-word values to be wrapped in `{braces}`:
+
+```
+State {Can be test}
+Assignee {John Doe}
+tag {my multi-word tag}
+priority {Show-stopper}
+```
+
+The MCP server **automatically wraps** values for the following tools:
+- `youtrack_update_issue_state` — the `state` parameter is wrapped automatically.
+- `youtrack_change_issue_assignee` — the `assignee` parameter is wrapped automatically.
+- `youtrack_manage_issue_tags` — each tag name in `add` / `remove` is wrapped automatically.
+
+For `youtrack_execute_command` (raw command), **you must wrap values yourself** using `{}` in the `command` string (e.g. `State {In Progress}`).
+
+**Search queries** (`youtrack_search_issues`) also use `{}` for multi-word field values:
+
+```
+State: {Can be test}
+Assignee: {John Doe}
+```
+
+Note: double quotes (`"..."`) are **not** equivalent to braces in YouTrack query/command syntax and may cause HTTP 400. Always prefer `{}`.
+
 ### Creating issues: `projectId`
 
 `youtrack_create_issue` accepts:
@@ -165,6 +192,30 @@ Illustrative arguments only; adjust ids to your instance.
 }
 ```
 
+**Change issue state** (multi-word value — wrapped automatically)
+
+```json
+{
+  "tool": "youtrack_update_issue_state",
+  "arguments": {
+    "id": "DV-10",
+    "state": "Can be test"
+  }
+}
+```
+
+**Execute arbitrary command**
+
+```json
+{
+  "tool": "youtrack_execute_command",
+  "arguments": {
+    "id": "IAG-42",
+    "command": "State {In Progress} priority Critical"
+  }
+}
+```
+
 **Add tag**
 
 ```json
@@ -214,7 +265,24 @@ Illustrative arguments only; adjust ids to your instance.
 | `youtrack_kb_create_article` | Create article (summary, content, project)    |
 | `youtrack_kb_update_article` | Update article summary and/or content         |
 
-**Issues, projects, users, commands, etc.** — see `server.mjs` `ListTools` handler for the full list (`youtrack_search_issues`, `youtrack_get_issue`, `youtrack_create_issue`, `youtrack_link_issues`, `youtrack_manage_issue_tags`, …).
+**Issues & commands:**
+
+| Tool                              | Description                                           |
+|-----------------------------------|-------------------------------------------------------|
+| `youtrack_search_issues`          | Search issues (YouTrack query language, pagination)   |
+| `youtrack_get_issue`              | Get one issue by id                                   |
+| `youtrack_create_issue`           | Create issue (shortName or internal project id)       |
+| `youtrack_update_issue`           | Update issue summary / description                    |
+| `youtrack_update_issue_state`     | Change issue state (auto-wraps multi-word values)     |
+| `youtrack_execute_command`        | Execute arbitrary YouTrack command on an issue        |
+| `youtrack_change_issue_assignee`  | Change assignee (auto-wraps multi-word names)         |
+| `youtrack_add_issue_comment`      | Add comment to an issue                               |
+| `youtrack_get_issue_comments`     | List issue comments                                   |
+| `youtrack_get_issue_fields_schema`| Get custom fields schema for a project                |
+| `youtrack_manage_issue_tags`      | Add / remove tags (auto-wraps multi-word tags)        |
+| `youtrack_link_issues`            | Link two issues (Subtask of, depends on, etc.)        |
+
+**Projects, users, groups, time tracking, saved searches** — see `server.mjs` `ListTools` handler for the full list.
 
 ## Tests
 

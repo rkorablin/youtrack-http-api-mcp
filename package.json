@@ -1,6 +1,6 @@
 {
   "name": "youtrack-http-api-mcp",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "description": "MCP server for YouTrack over HTTP API (issues, KB, and related resources)",
   "type": "module",
   "main": "server.mjs",

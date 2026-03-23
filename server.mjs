@@ -15,7 +15,8 @@ import { ListToolsRequestSchema, CallToolRequestSchema } from '@modelcontextprot
 import {
   buildCommandsRequestBody,
   buildLinkCommandQuery,
-  projectPayloadForCreateIssue
+  projectPayloadForCreateIssue,
+  wrapCommandValue
 } from './lib/youtrack-helpers.mjs';
 
 const baseUrl = (process.env.YOUTRACK_URL || '').replace(/\/$/, '');
@@ -76,7 +77,7 @@ function jsonContent(value) {
 }
 
 const server = new Server(
-  { name: 'youtrack-http-api-mcp', version: '0.2.2' },
+  { name: 'youtrack-http-api-mcp', version: '0.3.0' },
   { capabilities: { tools: {} } }
 );
 
@@ -269,6 +270,34 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           }
         },
         required: ['sourceId', 'targetId', 'linkType']
+      }
+    },
+
+    // Generic command execution
+    {
+      name: 'youtrack_execute_command',
+      description:
+        'Execute an arbitrary YouTrack command on an issue via Commands API (e.g. "State {Can be test}", "priority Critical", "Type Bug"). Values with spaces must use YouTrack {braces} syntax inside the command string.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', description: 'Issue id or readable id (e.g. PRJ-1)' },
+          command: { type: 'string', description: 'YouTrack command string (e.g. "State {In Progress}", "fixed", "priority Critical")' }
+        },
+        required: ['id', 'command']
+      }
+    },
+    {
+      name: 'youtrack_update_issue_state',
+      description:
+        'Change issue state/status. Automatically wraps multi-word state names in {braces} for YouTrack Commands API (e.g. state "Can be test" → command "State {Can be test}").',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', description: 'Issue id or readable id (e.g. PRJ-1)' },
+          state: { type: 'string', description: 'Target state name (e.g. "Can be test", "Fixed", "In Progress")' }
+        },
+        required: ['id', 'state']
       }
     },
 
@@ -489,7 +518,7 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
       const id = a.id;
       const assignee = a.assignee;
       if (!id || !assignee) throw new Error('id and assignee are required');
-      const query = `Assignee ${assignee}`;
+      const query = `Assignee ${wrapCommandValue(assignee)}`;
       const data = await ytApplyCommand(query, [id]);
       return { content: jsonContent({ query, issues: [id], result: data }) };
     }
@@ -531,8 +560,8 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
       const remove = Array.isArray(a.remove) ? a.remove : [];
       if (!add.length && !remove.length) throw new Error('Specify at least one tag to add or remove');
       const parts = [];
-      if (add.length) parts.push(`tag ${add.join(', ')}`);
-      if (remove.length) parts.push(`untag ${remove.join(', ')}`);
+      if (add.length) parts.push(`tag ${add.map(wrapCommandValue).join(', ')}`);
+      if (remove.length) parts.push(`untag ${remove.map(wrapCommandValue).join(', ')}`);
       const query = parts.join(' ');
       const data = await ytApplyCommand(query, [id]);
       return { content: jsonContent({ query, issues: [id], result: data }) };
@@ -546,6 +575,24 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
       const query = buildLinkCommandQuery(linkType, targetId);
       const data = await ytApplyCommand(query, [sourceId]);
       return { content: jsonContent({ query, issues: [sourceId], targetId, linkType, result: data }) };
+    }
+
+    // Generic command execution
+    if (name === 'youtrack_execute_command') {
+      const id = a.id;
+      const command = a.command;
+      if (!id || !command) throw new Error('id and command are required');
+      const data = await ytApplyCommand(command, [id]);
+      return { content: jsonContent({ command, issues: [id], result: data }) };
+    }
+
+    if (name === 'youtrack_update_issue_state') {
+      const id = a.id;
+      const state = a.state;
+      if (!id || !state) throw new Error('id and state are required');
+      const query = `State ${wrapCommandValue(state)}`;
+      const data = await ytApplyCommand(query, [id]);
+      return { content: jsonContent({ query, issues: [id], result: data }) };
     }
 
     // Projects

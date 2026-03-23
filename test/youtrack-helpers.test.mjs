@@ -4,7 +4,8 @@ import {
   issueRef,
   buildCommandsRequestBody,
   buildLinkCommandQuery,
-  projectPayloadForCreateIssue
+  projectPayloadForCreateIssue,
+  wrapCommandValue
 } from '../lib/youtrack-helpers.mjs';
 
 describe('issueRef', () => {
@@ -57,6 +58,33 @@ describe('buildLinkCommandQuery', () => {
 
   test('single token gets link prefix', () => {
     assert.equal(buildLinkCommandQuery('relates', 'IAG-9'), 'link relates IAG-9');
+  });
+});
+
+describe('wrapCommandValue', () => {
+  test('single word → no wrapping', () => {
+    assert.equal(wrapCommandValue('Fixed'), 'Fixed');
+    assert.equal(wrapCommandValue('Critical'), 'Critical');
+  });
+
+  test('multi-word → wraps in {}', () => {
+    assert.equal(wrapCommandValue('Can be test'), '{Can be test}');
+    assert.equal(wrapCommandValue('In Progress'), '{In Progress}');
+  });
+
+  test('already wrapped → no double wrapping', () => {
+    assert.equal(wrapCommandValue('{Can be test}'), '{Can be test}');
+  });
+
+  test('empty / null → empty string', () => {
+    assert.equal(wrapCommandValue(''), '');
+    assert.equal(wrapCommandValue(null), '');
+    assert.equal(wrapCommandValue(undefined), '');
+  });
+
+  test('trims whitespace', () => {
+    assert.equal(wrapCommandValue('  Fixed  '), 'Fixed');
+    assert.equal(wrapCommandValue('  In Progress  '), '{In Progress}');
   });
 });
 
